@@ -137,52 +137,7 @@ int add_new_landmarks_between_cams(const TimeCamId& tcid0,
 
   // TODO SHEET 4: Triangulate all new features and add to the map
   // Start
-  opengv::bearingVectors_t bearingVectors0;
-  opengv::bearingVectors_t bearingVectors1;
-
-  for (TrackId shared_track_id : shared_track_ids) {
-
-    if (landmarks.find(shared_track_id) == landmarks.end()) {
-
-      new_track_ids.push_back(shared_track_id);
-
-      FeatureId featureId0 = feature_tracks.at(shared_track_id).at(tcid0);
-      FeatureId featureId1 = feature_tracks.at(shared_track_id).at(tcid1);
-
-      Eigen::Vector2d p0_2d = feature_corners.at(tcid0).corners[featureId0];
-      Eigen::Vector2d p1_2d = feature_corners.at(tcid1).corners[featureId1];
-
-      bearingVectors0.push_back(calib_cam.intrinsics[tcid0.second]->unproject(p0_2d).normalized());
-      bearingVectors1.push_back(calib_cam.intrinsics[tcid1.second]->unproject(p1_2d).normalized());
-
-    }
-  }
-
-  Sophus::SE3d relative_pose;
-  relative_pose = cameras.at(tcid0).T_w_c.inverse() * cameras.at(tcid1).T_w_c;
-
-  opengv::relative_pose::CentralRelativeAdapter adapter(
-      bearingVectors0, bearingVectors1, relative_pose.translation(), relative_pose.rotationMatrix());
-
-  for (int index = 0; index < new_track_ids.size(); index++) {
-
-    opengv::point_t point = opengv::triangulation::triangulate(adapter, index);
-
-    Landmark landmark;
-    landmark.p = cameras.at(tcid0).T_w_c * point;
-
-    for (auto iterator = feature_tracks.at(new_track_ids[index]).begin();
-         iterator != feature_tracks.at(new_track_ids[index]).end(); iterator++) {
-
-      auto find = cameras.find(iterator->first);
-      if (find != cameras.end()) {
-        landmark.obs[iterator->first] = iterator->second;
-      }
-    }
-    landmarks[new_track_ids[index]] = landmark;
-  }
-
-  return new_track_ids.size();
+  
 }
 
 // Initialize the scene from a stereo pair, using the known transformation from
@@ -207,16 +162,7 @@ bool initialize_scene_from_stereo_pair(const TimeCamId& tcid0,
 
   // TODO SHEET 4: Initialize scene (add initial cameras and landmarks)
 
-  std::cout << "Into initialize_scene_from_stereo_pair.\n";
-    //cout << "Printing all the values: \n" << tcid0.second << " " << tcid1.second << "\n";
-
-
-    //Sophus::SE3d test = (Sophus::SE3d)Eigen::Matrix4Xd::Identity();
-      cameras[tcid0].T_w_c = (Sophus::SE3d)Eigen::Matrix<double, 4, 4>::Identity();
-      cameras[tcid1].T_w_c = calib_cam.T_i_c[tcid1.second];
-
-      add_new_landmarks_between_cams(tcid0, tcid1, calib_cam, feature_corners, feature_tracks, cameras, landmarks);
-
+ 
   return true;
 }
 
@@ -243,59 +189,7 @@ void localize_camera(
 
   // TODO SHEET 4: Localize a new image in a given map
 
-  opengv::bearingVectors_t bearingVectors;
-  opengv::points_t points;
-
-  for (TrackId shared_track_id : shared_track_ids) {
-
-      FeatureId featureId = feature_tracks.at(shared_track_id).at(tcid);
-
-      Eigen::Vector2d p_2d = feature_corners.at(tcid).corners[featureId];
-
-      bearingVectors.push_back(calib_cam.intrinsics[tcid.second]->unproject(p_2d).normalized());
-
-      opengv::point_t point = landmarks.at(shared_track_id).p;
-      points.push_back(point);
-  }
-
-  // create the central adapter
-  opengv::absolute_pose::CentralAbsoluteAdapter adapter(
-      bearingVectors, points );
-  // create a Ransac object
-  opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
-  // create an AbsolutePoseSacProblem
-  // (algorithm is selectable: KNEIP, GAO, or EPNP)
-  std::shared_ptr<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem>
-      absposeproblem_ptr(
-      new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
-      adapter, opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::KNEIP ) );
-  // run ransac
-  ransac.sac_model_ = absposeproblem_ptr;
-
-  double threshold = 1.0 - cos((reprojection_error_pnp_inlier_threshold_pixel / 500.0));
-  ransac.threshold_ = threshold;
-
-  ransac.max_iterations_ = 50;
-  ransac.computeModel();
-
-    adapter.sett(T_w_c.translation());
-    adapter.setR(T_w_c.rotationMatrix());
-
-    const opengv::transformation_t nonlinear_transformation =
-        opengv::absolute_pose::optimize_nonlinear(adapter, ransac.inliers_);
-
-    T_w_c.setRotationMatrix(nonlinear_transformation.block<3, 3>(0, 0));
-    T_w_c.translation() = nonlinear_transformation.block<3, 1>(0, 3);
-
-    ransac.sac_model_->selectWithinDistance(nonlinear_transformation,
-                                            ransac.threshold_, ransac.inliers_);
-
-//  std::cout << "ransac.inliers_size: " << ransac.inliers_.size() << "\n";
-
-  for (int j = 0; j < ransac.inliers_.size() ; j++) {
-      inlier_track_ids.push_back(shared_track_ids.at(ransac.inliers_[j]));
-  }
-}
+  
 
 struct BundleAdjustmentOptions {
   /// 0: silent, 1: ceres brief report (one line), 2: ceres full report
@@ -325,71 +219,7 @@ void bundle_adjustment(const Corners& feature_corners,
 
   // TODO SHEET 4: Setup optimization problem
 
-  for(auto& camera : cameras) {
-      problem.AddParameterBlock(
-                  camera.second.T_w_c.data(),
-                  Sophus::SE3d::num_parameters,
-                  new Sophus::test::LocalParameterizationSE3
-                  );
-
-      if (fixed_cameras.find(camera.first) != fixed_cameras.end()) {
-          problem.SetParameterBlockConstant(cameras.at(camera.first).T_w_c.data());
-      }
-  }
-
-  for (auto& landmark : landmarks) {
-       problem.AddParameterBlock(
-                  landmark.second.p.data(),
-                  3
-                  );
-
-  }
-
-  for (auto& intrinsic : calib_cam.intrinsics) {
-          problem.AddParameterBlock(
-                  intrinsic->data(),
-                  8
-                  );
-
-          if(!options.optimize_intrinsics) {
-              problem.SetParameterBlockConstant(intrinsic->data());
-          }
-  }
-
-  for (auto& landmark : landmarks) {
-
-      for (auto& featureTracks : landmark.second.obs) {
-
-          TimeCamId tcid = featureTracks.first;
-
-          ceres::CostFunction* cost_function =
-          new ceres::AutoDiffCostFunction
-                                         <
-                                         BundleAdjustmentReprojectionCostFunctor,
-                                         2,
-                                         Sophus::SE3d::num_parameters,
-                                         3,
-                                         8>
-                                         (new BundleAdjustmentReprojectionCostFunctor(
-                                              feature_corners.at(tcid).corners.at(featureTracks.second),
-                                         calib_cam.intrinsics[tcid.second]->name()));
-
-          if (options.use_huber) {
-              problem.AddResidualBlock(cost_function, new ceres::HuberLoss(options.huber_parameter),
-                                       cameras.at(tcid).T_w_c.data(),
-                                       landmark.second.p.data(),
-                                       calib_cam.intrinsics[tcid.second]->data());
-          }
-          else {
-              problem.AddResidualBlock(cost_function, NULL,
-                                       cameras.at(tcid).T_w_c.data(),
-                                       landmark.second.p.data(),
-                                       calib_cam.intrinsics[tcid.second]->data());
-          }
-
-      }
-  }
-
+  
   // Solve
   ceres::Solver::Options ceres_options;
   ceres_options.max_num_iterations = options.max_num_iterations;

@@ -162,25 +162,8 @@ void computeAngles(const pangolin::ManagedImage<uint8_t>& img_raw,
 
     if (rotate_features) {
       // TODO: compute angle
-
-        int m01 = 0.0;
-        int m10 = 0.0;
-        int value = 0.0;
-
-        for (int x = -15; x < 16; x++) {
-            for (int y = -15; y < 16 ; y++) {
-                if ((((x) * (x)) + ((y) * (y))) <= (225.0)) {
-
-                    value = ((int)img_raw((cx + x), (cy + y)));
-                    m01 += ((y) * value);
-                    m10 += ((x) * value);
-                }
-            }
-        }
-
-        angle = std::atan2(m01, m10);
+ 
     }
-
     kd.corner_angles[i] = angle;
   }
 }
@@ -201,38 +184,6 @@ void computeDescriptors(const pangolin::ManagedImage<uint8_t>& img_raw,
     int cy = p[1];
 
     // TODO: compute descriptor
-
-    double cos_theta = std::cos(angle);
-    double sin_theta = std::sin(angle);
-
-    Eigen::Matrix<double, 2, 2> rotation;
-    rotation << cos_theta, -(sin_theta),
-            sin_theta, cos_theta;
-
-    Eigen::Vector2d p_a, p_b, p_a_prime, p_b_prime;
-
-    int count = 0;
-
-    for (int j = 0; j < 256; j++) {
-
-                p_a << (((int)pattern_31_x_a[j])), (((int)pattern_31_y_a[j]));
-                p_b << (((int)pattern_31_x_b[j])), (((int)pattern_31_y_b[j]));
-
-                p_a_prime = p + (rotation * p_a);
-                p_b_prime = p + (rotation * p_b);
-
-                double p_a_prime_intensity = (double)img_raw(round(p_a_prime(0)), round(p_a_prime(1)));
-                double p_b_prime_intensity = (double)img_raw(round(p_b_prime(0)), round(p_b_prime(1)));
-
-                if (p_a_prime_intensity < p_b_prime_intensity) {
-                    descriptor[j] = 1;
-                } else {
-                    descriptor[j] = 0;
-                }
-    }
-
-    kd.corner_descriptors[i] = descriptor;
-  }
 }
 
 void detectKeypointsAndDescriptors(

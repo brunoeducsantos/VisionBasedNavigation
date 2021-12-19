@@ -339,74 +339,12 @@ void compute_projections() {
 void optimize() {
     // Build the problem.
    ceres::Problem problem;
-
    // TODO: setup optimization problem
-
-   std::cout<< "into the optimize function\n";
-
-   for (int i = 0; i < calib_cam.T_i_c.size(); ++i) {
-       problem.AddParameterBlock(
-                                calib_cam.T_i_c[i].data(),
-                                Sophus::SE3d::num_parameters,
-                                new Sophus::test::LocalParameterizationSE3
-                                );
-   }
-
-   problem.SetParameterBlockConstant(calib_cam.T_i_c[0].data());
-
-   for (int i = 0; i < vec_T_w_i.size(); ++i) {
-       problem.AddParameterBlock(
-                                vec_T_w_i[i].data(),
-                                Sophus::SE3d::num_parameters,
-                                new Sophus::test::LocalParameterizationSE3
-                                );
-   }
-
-   for (const auto& kv : calib_corners) {
-       for (int i = 0; i < kv.second.corners.size(); i++){
-            int id = kv.second.corner_ids[i];
-            Eigen::Vector3d pos_3d = aprilgrid.aprilgrid_corner_pos_3d[id];
-
-           //std::cout<<pos_3d<<"\n";
-
-           Eigen::Vector2d pos_2d = kv.second.corners[i];
-           Sophus::SE3d T_w_i = vec_T_w_i[kv.first.first];
-           Sophus::SE3d T_i_c = calib_cam.T_i_c[kv.first.second];
-
-           ceres::CostFunction* cost_function =
-           new ceres::AutoDiffCostFunction
-                                          <
-                                          ReprojectionCostFunctor,
-                                          2,
-                                          Sophus::SE3d::num_parameters,
-                                          Sophus::SE3d::num_parameters,
-                                          8>
-                                          (new ReprojectionCostFunctor(pos_2d, pos_3d,
-                                          cam_model));
-
-            problem.AddResidualBlock(cost_function, NULL,
-                                            vec_T_w_i[kv.first.first].data(),
-                                            calib_cam.T_i_c[kv.first.second].data(),
-                                            calib_cam.intrinsics[kv.first.second]->data());
-    }
-  }
-
-  ceres::Solver::Options options;
-  options.gradient_tolerance = 0.01 * Sophus::Constants<double>::epsilon();
-  options.function_tolerance = 0.01 * Sophus::Constants<double>::epsilon();
-  options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
-
-  // Solve
-  ceres::Solver::Summary summary;
-  Solve(options, &problem, &summary);
-  std::cout << summary.FullReport() << std::endl;
-
   {
     cereal::JSONOutputArchive archive(std::cout);
     archive(calib_cam);
     std::cout << std::endl;
   }
-
   compute_projections();
 }
 

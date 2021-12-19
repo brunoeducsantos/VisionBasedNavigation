@@ -51,18 +51,7 @@ void computeEssential(const Sophus::SE3d& T_0_1, Eigen::Matrix3d& E) {
   const Eigen::Matrix3d R_0_1 = T_0_1.rotationMatrix();
 
   // TODO: compute essential matrix
-//  std::cout << "Into computeEssential Function\n";
 
-  // Making Skew symetry matrix
-  Eigen::Vector3d t_0_1_normalized = t_0_1.normalized();
-
-  Eigen::Matrix3d t_skew;
-
-  t_skew << 0, -t_0_1_normalized(2), t_0_1_normalized(1),
-          t_0_1_normalized(2), 0, -t_0_1_normalized(0),
-          -t_0_1_normalized(1), t_0_1_normalized(0), 0;
-
-  E = t_skew * R_0_1;
 }
 
 void findInliersEssential(const KeypointsData& kd1, const KeypointsData& kd2,
@@ -77,14 +66,7 @@ void findInliersEssential(const KeypointsData& kd1, const KeypointsData& kd2,
     const Eigen::Vector2d p1_2d = kd2.corners[md.matches[j].second];
 
     // TODO: determine inliers and store in md.inliers
-    Eigen::Vector3d p0_3d = cam1->unproject(p0_2d);
-    Eigen::Vector3d p1_3d = cam2->unproject(p1_2d);
-
-    double epipolar_constraint = p0_3d.transpose() * E * p1_3d;
-
-    if (((epipolar_constraint) < epipolar_error_threshold) && ((epipolar_constraint) > (-epipolar_error_threshold))) {
-        md.inliers.push_back(std::make_pair(md.matches[j].first, md.matches[j].second));
-    }
+    
 
   }
 }

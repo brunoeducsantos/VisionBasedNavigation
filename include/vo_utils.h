@@ -60,25 +60,7 @@ void project_landmarks(
   // projected_points and the corresponding id of the landmark into
   // projected_track_ids.
 
-  for (auto& landmark : landmarks) {
-      TrackId trackId = landmark.first;
-      Eigen::Vector3d landmark_position_in_world_coordinate = landmark.second.p; // In world coordinate
-      Eigen::Vector3d landmark_position_in_camera_coordinate = current_pose.inverse() * landmark_position_in_world_coordinate;
-
-      if (landmark_position_in_camera_coordinate.z() >= cam_z_threshold) {
-          Eigen::Vector2d landmark_projection_in_2d_image_plane = cam->project(landmark_position_in_camera_coordinate);
-
-          if (
-                  (landmark_projection_in_2d_image_plane.x() >= 0) &&
-                  (landmark_projection_in_2d_image_plane.x() < 752) &&
-                  (landmark_projection_in_2d_image_plane.y() >= 0) &&
-                  (landmark_projection_in_2d_image_plane.y() < 480)) {
-
-              projected_points.push_back(landmark_projection_in_2d_image_plane);
-              projected_track_ids.push_back(trackId);
-          }
-      }
-  }
+   
 }
 
 void find_matches_landmarks(
@@ -99,60 +81,7 @@ void find_matches_landmarks(
   // the descriptor of the current point and descriptors of all observations of
   // the landmarks. The feature_match_max_dist and feature_match_test_next_best
   // should be used to filter outliers the same way as in exercise 3.
-
-  for (int i = 0; i < kdl.corners.size(); i++) {
-      int first_best = 1000;
-      int second_best = 1000;
-      int save_index = -1;
-
-      std::bitset<256> corner_descriptor_1 = kdl.corner_descriptors.at(i);
-
-      for (int j = 0; j < projected_points.size(); j++) {
-        double distance = std::sqrt(
-                    ((kdl.corners.at(i).x() - projected_points.at(j).x()) *
-                     (kdl.corners.at(i).x() - projected_points.at(j).x())) +
-                    ((kdl.corners.at(i).y() - projected_points.at(j).y()) *
-                     (kdl.corners.at(i).y() - projected_points.at(j).y())));
-
-        if (distance < match_max_dist_2d) {
-            TrackId trackId = projected_track_ids.at(j);
-            Landmark landmark = landmarks.at(trackId);
-
-            int minHamdist = 1000;
-            for (auto observation : landmark.obs) {
-                TimeCamId tcid = observation.first;
-                FeatureId featureId = observation.second;
-
-                KeypointsData keypointData = feature_corners.at(tcid);
-                std::bitset<256> corner_descriptor_2 = keypointData.corner_descriptors.at(featureId);
-
-
-                std::bitset<256> diff_bitset = (corner_descriptor_1 ^ corner_descriptor_2);
-                int hamDist = diff_bitset.count();
-
-                if (hamDist < minHamdist) {
-                    minHamdist = hamDist;
-                }
-
-            }
-
-            if (minHamdist < first_best)
-            {
-                second_best = first_best;
-                first_best = minHamdist;
-                save_index = projected_track_ids[j];
-            }
-            else if (minHamdist < second_best)
-            {
-                second_best = minHamdist;
-            }
-        }
-    }
-
-      if ((first_best < feature_match_max_dist) && (second_best > (first_best * feature_match_test_next_best))) {
-          md.matches.push_back(std::make_pair(i, save_index));
-      }
-  }
+ 
 }
 
 void localize_camera(const std::shared_ptr<AbstractCamera<double>>& cam,
@@ -171,56 +100,6 @@ void localize_camera(const std::shared_ptr<AbstractCamera<double>>& cam,
   // keypoints matches and PnP. This should be similar to the localize_camera in
   // exercise 4 but in this execise we don't explicitelly have tracks.
 
-  opengv::bearingVectors_t bearingVectors;
-  opengv::points_t points;
-
-  for (auto& match : md.matches) {
-
-      FeatureId featureId = match.first;
-
-      Eigen::Vector2d p_2d = kdl.corners.at(featureId);
-
-      bearingVectors.push_back(cam->unproject(p_2d).normalized());
-
-      opengv::point_t point = landmarks.at(match.second).p;
-      points.push_back(point);
-  }
-
-  // create the central adapter
-  opengv::absolute_pose::CentralAbsoluteAdapter adapter(
-      bearingVectors, points );
-  // create a Ransac object
-  opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
-  // create an AbsolutePoseSacProblem
-  // (algorithm is selectable: KNEIP, GAO, or EPNP)
-  std::shared_ptr<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem>
-      absposeproblem_ptr(
-      new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
-      adapter, opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::KNEIP ) );
-  // run ransac
-  ransac.sac_model_ = absposeproblem_ptr;
-
-  double threshold = 1.0 - cos((reprojection_error_pnp_inlier_threshold_pixel / 500.0));
-  ransac.threshold_ = threshold;
-
-  ransac.max_iterations_ = 50;
-  ransac.computeModel();
-
-    adapter.sett(T_w_c.translation());
-    adapter.setR(T_w_c.rotationMatrix());
-
-    const opengv::transformation_t nonlinear_transformation =
-        opengv::absolute_pose::optimize_nonlinear(adapter, ransac.inliers_);
-
-    T_w_c.setRotationMatrix(nonlinear_transformation.block<3, 3>(0, 0));
-    T_w_c.translation() = nonlinear_transformation.block<3, 1>(0, 3);
-
-    ransac.sac_model_->selectWithinDistance(nonlinear_transformation,
-                                            ransac.threshold_, ransac.inliers_);
-
-  std::cout << "ransac.inliers_size: " << ransac.inliers_.size() << "\n";
-
-  inliers = ransac.inliers_;
 }
 
 void add_new_landmarks(const TimeCamId tcidl, const TimeCamId tcidr,
@@ -244,61 +123,7 @@ void add_new_landmarks(const TimeCamId tcidl, const TimeCamId tcidr,
   // after adding a new landmark you should always increase next_landmark_id
   // by 1.
 
-  std::map<FeatureId, FeatureId> myStereo;
-
-  for (auto& inlier : md_stereo.inliers) {
-      myStereo[inlier.first] = inlier.second;
-  }
-
-  for (int i = 0; i < inliers.size(); i++) {
-      FeatureId featureId0 = md.matches.at(inliers.at(i)).first;
-      FeatureId featureId1 = md.matches.at(inliers.at(i)).second;
-
-      Landmark& landmark = landmarks[featureId1];
-      landmark.obs[tcidl] = featureId0;
-
-      auto found = myStereo.find(featureId0);
-      if (found != myStereo.end()) {
-          landmark.obs[tcidr] = found->second;
-      }
-      myStereo.erase(featureId0);
-  }
-
-  std::vector<std::pair<FeatureId, FeatureId>> my_inliers;
-
-  opengv::bearingVectors_t bearingVectors0;
-  opengv::bearingVectors_t bearingVectors1;
-
-  for (auto& matchData : myStereo) {
-
-      FeatureId featureId0 = matchData.first;
-      FeatureId featureId1 = matchData.second;
-
-      my_inliers.push_back(std::make_pair(featureId0, featureId1));
-
-      Eigen::Vector2d p0_2d = kdl.corners[featureId0];
-      Eigen::Vector2d p1_2d = kdl.corners[featureId1];
-
-      bearingVectors0.push_back(calib_cam.intrinsics[tcidl.second]->unproject(p0_2d).normalized());
-      bearingVectors1.push_back(calib_cam.intrinsics[tcidr.second]->unproject(p1_2d).normalized());
-
-  }
-
-  opengv::relative_pose::CentralRelativeAdapter adapter(
-      bearingVectors0, bearingVectors1, t_0_1, R_0_1);
-
-  for (int index = 0; index < bearingVectors0.size(); index++) {
-
-    opengv::point_t point = opengv::triangulation::triangulate(adapter, index);
-
-    Landmark landmark;
-    landmark.p = T_w_c0 * point;
-    landmark.obs[tcidl] = my_inliers.at(index).first;
-    landmark.obs[tcidr] = my_inliers.at(index).second;
-
-    landmarks[next_landmark_id] = landmark;
-    next_landmark_id++;
-  }
+  
 }
 
 void remove_old_keyframes(const TimeCamId tcidl, const int max_num_kfs,
@@ -312,26 +137,6 @@ void remove_old_keyframes(const TimeCamId tcidl, const int max_num_kfs,
   // of all the keyframes that are currently in the optimization should be
   // stored in kf_frames. Removed keyframes should be removed from cameras and
   // landmarks with no left observations should be moved to old_landmarks.
-
-  while (true) {
-      if (kf_frames.size() > max_num_kfs) {
-
-          FrameId frameId = *(kf_frames.begin());
-
-          cameras.erase(TimeCamId(frameId, tcidl.second));
-          cameras.erase(TimeCamId(frameId, (tcidl.second + 1)));
-
-          for (auto& landmark : landmarks) {
-            landmark.second.obs.erase(TimeCamId(frameId, tcidl.second));
-            landmark.second.obs.erase(TimeCamId(frameId, (tcidl.second + 1)));
-
-          }
-
-          kf_frames.erase(frameId);
-      }
-      else {
-          break;
-      }
-    }
+ 
 
 }
