@@ -321,12 +321,8 @@ void compute_projections() {
 
       // TODO: project point
 
-//      DoubleSphereCamera<double> ds = DoubleSphereCamera<double>();
-//      p_2d = ds.project(p_3d);
-        //T_i_c.inverse() * T_w_i.inverse() * p_3d;
-      //T_i_c.det
-      p_2d = calib_cam.intrinsics[kv.first.second]->project(T_i_c.inverse() * T_w_i.inverse() * p_3d);
-//      std::cout<<calib_cam.T_i_c.
+ 
+ 
 
       // END TODO: project point
 
